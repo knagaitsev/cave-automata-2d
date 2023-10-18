@@ -1,4 +1,4 @@
-var automata = require('./')
+var automata = require('./index.js')
 var zeros = require('zeros')
 
 var buffer = zeros([120, 40])
@@ -7,6 +7,8 @@ var buffer = zeros([120, 40])
   , iterate = automata(buffer, {
     density: 0.5
   })
+
+console.log(iterate);
 
 for (var i = 0; i < 10; i += 1) setTimeout(function() {
   for (var y = 1; y < height-1; y += 1) {

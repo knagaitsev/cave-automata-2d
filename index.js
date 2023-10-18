@@ -1,12 +1,10 @@
 var neighborhood = require('moore')(1, 2).concat([[0,0]])
-var stencil = require('ndarray-stencil')
+var cwise = require('cwise')
 var fill = require('ndarray-fill')
 var zero = require('zeros')
 
 var neighbors = neighborhood.length
 var stencils = {}
-
-module.exports = generate
 
 // ndarray-stencil generates code using cwise, and as
 // such incurs a slight performance hit initially.
@@ -17,21 +15,54 @@ var sharedHeight = null
 var sharedBorder = null
 var sharedThreshold = null
 
-stencils.vanilla = stencil(neighborhood, function(p1,p2,p3,p4,p5,p6,p7,p8,p9,pos) {
-  return (
-    p1+p2+p3+p4+p5+p6+p7+p8+p9 >= sharedThreshold
-  ) ? 1 : 0
-}, { useIndex: false })
+stencils.vanilla = cwise({
+  args:["array", "array", "scalar", "scalar", "scalar", "scalar", {offset:[0,1], array:1}, {offset:[0,-1], array:1}, {offset:[1,0], array:1}, {offset:[-1,0], array:1}, {offset:[1,1], array:1}, {offset:[1,-1], array:1}, {offset:[-1,1], array:1}, {offset:[-1,-1], array:1}, {offset:[0, 0], array:1}],
+  body:function(a,b,sharedThreshold,sharedBorder,sharedWidth,sharedHeight,p1,p2,p3,p4,p5,p6,p7,p8,p9) {
+    a = p1+p2+p3+p4+p5+p6+p7+p8+p9 >= 0.5 ? 1 : 0
+  }
+})
 
-stencils.border = stencil(neighborhood, function(p1,p2,p3,p4,p5,p6,p7,p8,p9,pos) {
-  return (
-    p1+p2+p3+p4+p5+p6+p7+p8+p9 >= sharedThreshold ||
-    pos[0] < sharedBorder ||
-    pos[0] > sharedWidth - sharedBorder - 3 ||
-    pos[1] < sharedBorder ||
-    pos[1] > sharedHeight - sharedBorder - 3
-  ) ? 1 : 0
-}, { useIndex: true })
+stencils.border = cwise({
+  args:["array", "array", "scalar", "scalar", "scalar", "scalar", {offset:[0,1], array:1}, {offset:[0,-1], array:1}, {offset:[1,0], array:1}, {offset:[-1,0], array:1}, {offset:[1,1], array:1}, {offset:[1,-1], array:1}, {offset:[-1,1], array:1}, {offset:[-1,-1], array:1}, {offset:[0, 0], array:1}, "index"],
+  body:function(a,b,sharedThreshold,sharedBorder,sharedWidth,sharedHeight,p1,p2,p3,p4,p5,p6,p7,p8,p9,pos) {
+    a = (
+      p1+p2+p3+p4+p5+p6+p7+p8+p9 >= sharedThreshold ||
+      pos[0] < sharedBorder ||
+      pos[0] > sharedWidth - sharedBorder - 3 ||
+      pos[1] < sharedBorder ||
+      pos[1] > sharedHeight - sharedBorder - 3
+    ) ? 1 : 0
+  }
+})
+
+// stencils.vanilla = cwise({
+//   args: ["array"],
+//   pre: function() {
+//     this.sum = 0
+//   },
+//   body: function(a) {
+//     this.sum += a
+//   },
+//   post: function() {
+//     return this.sum >= 5 ? 1 : 0
+//   }
+// });
+
+// stencils.vanilla = stencil(neighborhood, function(p1,p2,p3,p4,p5,p6,p7,p8,p9,pos) {
+//   return (
+//     p1+p2+p3+p4+p5+p6+p7+p8+p9 >= sharedThreshold
+//   ) ? 1 : 0
+// }, { useIndex: false })
+
+// stencils.border = stencil(neighborhood, function(p1,p2,p3,p4,p5,p6,p7,p8,p9,pos) {
+//   return (
+//     p1+p2+p3+p4+p5+p6+p7+p8+p9 >= sharedThreshold ||
+//     pos[0] < sharedBorder ||
+//     pos[0] > sharedWidth - sharedBorder - 3 ||
+//     pos[1] < sharedBorder ||
+//     pos[1] > sharedHeight - sharedBorder - 3
+//   ) ? 1 : 0
+// }, { useIndex: true })
 
 function generate(array, opts) {
   opts = opts || {}
@@ -42,7 +73,7 @@ function generate(array, opts) {
 
   var density = opts.density || 0.5
     , threshold = opts.threshold || 5
-    , border = 'border' in opts ? opts.border : 1
+    , border = 0
     , shouldFill = 'fill' in opts ? opts.fill : true
     , iterate = stencils[
       border ? 'border' : 'vanilla'
@@ -59,8 +90,6 @@ function generate(array, opts) {
     iterator(opts.iterations)
   }
 
-  return iterator
-
   // Updates the shared variables that are available
   // on the module-level scope. This is a synchronous
   // operation, so it's totally safe (though not
@@ -76,9 +105,9 @@ function generate(array, opts) {
 
     for (var i = 0; i < iterations; i += 1) {
       if (i % 2) {
-        iterate(array, buffer)
+        iterate(array, buffer,sharedThreshold,sharedBorder,sharedWidth,sharedHeight)
       } else {
-        iterate(buffer, array)
+        iterate(buffer, array,sharedThreshold,sharedBorder,sharedWidth,sharedHeight)
       }
     }
 
@@ -90,4 +119,8 @@ function generate(array, opts) {
 
     return array
   }
+
+  return iterator
 }
+
+module.exports = generate
