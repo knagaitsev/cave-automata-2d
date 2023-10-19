@@ -73,7 +73,7 @@ function generate(array, opts) {
 
   var density = opts.density || 0.5
     , threshold = opts.threshold || 5
-    , border = 0
+    , border = 'border' in opts ? opts.border : 1
     , shouldFill = 'fill' in opts ? opts.fill : true
     , iterate = stencils[
       border ? 'border' : 'vanilla'
